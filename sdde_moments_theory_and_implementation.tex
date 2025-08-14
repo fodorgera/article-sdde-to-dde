@@ -1,0 +1,215 @@
+
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,mathtools,bm}
+\usepackage{physics}
+\usepackage{microtype}
+% \usepackage{hyperref}
+\usepackage{upquote}
+\usepackage{listings}
+\usepackage{xcolor}
+\lstdefinelanguage{Julia}%
+  {morekeywords={abstract,break,case,catch,const,continue,do,else,elseif,end,%
+      export,false,for,function,immutable,import,importall,if,in,macro,module,%
+      quote,return,switch,true,try,type,typealias,using,while,where,struct,mutable,primitive},
+   sensitive=true,%
+   morecomment=[l]\#,%
+   morecomment=[n]{\#=}{=\#},%
+   morestring=[b]",%
+}
+\lstset{
+  language=Julia,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\bfseries\color{blue!60!black},
+  commentstyle=\itshape\color{green!40!black},
+  stringstyle=\color{orange!60!black},
+  showstringspaces=false,
+  columns=fullflexible,
+  frame=single,
+  breaklines=true,
+  postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+  tabsize=2
+}
+
+\title{Linear Affine SDDEs: Moment Equations, Method of Steps, and a Julia Implementation}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We derive and implement deterministic differential--delay equations (DDEs) for the first and second moments of a linear, affine stochastic delay differential equation (SDDE) with affine multiplicative noise. The result is a closed system for the mean, the second (raw) moment, and a ladder of cross-moments at integer multiples of the delay. We then show how to integrate these DDEs in \texttt{Julia} using the \texttt{DifferentialEquations.jl} ecosystem, covering practical details such as state layout, absolute-time history access, time-varying coefficients, and validation in a scalar test case with known behavior.
+\end{abstract}
+
+\section{Model}
+Consider the $n$-dimensional SDDE
+\begin{equation}\label{eq:sdde}
+  \dd x(t) = \big(Ax(t) + B x(t-\tau) + c\big)\,\dd t
+   \;+\; \big(\alpha x(t) + \beta x(t-\tau) + \gamma\big)\,\dd W_t,
+\end{equation}
+where $A,B,\alpha,\beta\in\mathbb{R}^{n\times n}$, $c,\gamma\in\mathbb{R}^n$, $\tau>0$, and $W_t$ is a scalar Wiener process.\footnote{For $m$-dimensional $W_t$ with covariance $Q$, replace $LL^\top$ by $LQL^\top$ throughout.} We assume an initial segment (history) $x(s)=\phi(s)$ for $s\in[-\tau,0]$ (deterministic unless stated otherwise).
+
+Define the mean $\mu(t)=\mathbb{E}[x(t)]$, the raw second moment $M(t)=\mathbb{E}[x(t)x(t)^\top]$, and for $k\ge1$ the cross-moments
+\begin{equation}
+  S_k(t) \;=\; \mathbb{E}\!\left[x(t)\,x\big(t-k\tau\big)^\top\right].
+\end{equation}
+Denote $N(t)=M(t-\tau)$ and $C(t)=S_1(t)$.
+
+\section{Moment equations}
+Taking expectations of \eqref{eq:sdde} gives the closed mean DDE
+\begin{equation}\label{eq:mean}
+  \dot\mu(t) = A\,\mu(t) + B\,\mu(t-\tau) + c.
+\end{equation}
+For the second moment, apply It\^o's product rule to $x(t)x(t)^\top$ and note that the quadratic variation contributes $L(t)L(t)^\top$ with
+$L(t)=\alpha x(t)+\beta x(t-\tau)+\gamma$:
+\begin{align}\label{eq:Mdot}
+  \dot M(t) &= A M(t) + M(t)A^\top + B M(t-\tau) + C(t) B^\top + c\,\mu(t)^\top + \mu(t)\,c^\top
+  \nonumber\\
+  &\quad + \mathbb{E}\!\left[L(t)L(t)^\top\right],
+\end{align}
+and a standard expansion yields
+\begin{align}\label{eq:ELLT}
+\mathbb{E}\!\left[L L^\top\right] &=
+  \alpha M\alpha^\top + \beta N\beta^\top + \alpha C\beta^\top + \beta C^\top\alpha^\top
+  \nonumber\\
+&\quad + \alpha\mu\,\gamma^\top + \gamma\mu^\top\alpha^\top
+      + \beta\mu_\tau\,\gamma^\top + \gamma\mu_\tau^\top\beta^\top + \gamma\gamma^\top,
+\end{align}
+where $\mu_\tau=\mu(t-\tau)$ and $N=M(t-\tau)$.
+
+For cross-moments there is no It\^o correction because $x(t-k\tau)$ has no differential at time $t$.
+For $C(t)=S_1(t)$ one gets
+\begin{equation}\label{eq:Cd}
+  \dot C(t) = A C(t) + C(t)A^\top + B M(t-\tau) + S_2(t) B^\top + c\,\mu(t-\tau)^\top + \mu(t)\,c^\top.
+\end{equation}
+For $D(t)=S_2(t)$ (and similarly onward),
+\begin{equation}\label{eq:Dd}
+  \dot S_2(t) = A S_2(t) + S_2(t)A^\top + B C(t-\tau) + S_3(t) B^\top + c\,\mu(t-2\tau)^\top + \mu(t)\,c^\top.
+\end{equation}
+In general, for $k\ge1$,
+\begin{equation}\label{eq:Sk}
+  \boxed{\;\dot S_k(t) = A S_k + S_k A^\top + B\,S_{k-1}(t-\tau) + S_{k+1} B^\top + c\,\mu(t-k\tau)^\top + \mu(t)\,c^\top,\;}
+\end{equation}
+with the convention $S_0(t)=M(t)$ and $S_{-1}(t)\equiv M(t-\tau)$ when $k=1$.
+
+\paragraph{Covariance form.}
+Let $P(t)=M(t)-\mu(t)\mu(t)^\top$ and $R_k(t)=S_k(t)-\mu(t)\mu(t-k\tau)^\top$. One can rewrite \eqref{eq:Mdot,eq:Sk} for $(P,R_k)$, but for implementation it is simpler to evolve raw moments and form covariances a posteriori.
+
+\paragraph{Steady state (delay Lyapunov).}
+If the system is mean-square stable, cross-covariances $S(\theta)=\lim_{t\to\infty}\mathbb{E}[x(t)x(t-\theta)^\top]$ satisfy $\dv*{S}{\theta}=A S$ for $\theta\in(0,\tau)$ with $S(0)=P$, yielding $S(\tau)=e^{A\tau}P$ and the algebraic \emph{delay Lyapunov} equation
+\begin{equation}
+  A P + P A^\top + B S(\tau)^\top + S(\tau) B^\top + \Gamma = 0,\qquad \Gamma=\mathbb{E}[L L^\top]_{\text{ss}}.
+\end{equation}
+
+\section{Method of steps and closure on a finite horizon}
+On $[0,\tau]$, all delayed quantities (e.g.\ $M(t-\tau)$, $\mu(t-\tau)$, $S_k(t-\tau)$) depend only on the history and are therefore known functions. Hence \eqref{eq:mean,eq:Mdot,eq:Sk} form a closed linear ODE in time. On each subsequent interval $[m\tau,(m+1)\tau]$, the delayed terms are known from the previously computed solution, so again we solve a closed ODE. For a finite horizon $[0,T]$, choosing $K=\lfloor T/\tau\rfloor$ ensures $t-(K+1)\tau<0$ for all $t\in[0,T]$, so the highest cross-moment that appears, $S_{K+1}(t)$, multiplies the \emph{history} only and is known:
+\begin{equation}
+  S_{K+1}(t) \;=\; \mu(t)\,\phi\!\big(t-(K+1)\tau\big)^\top \quad\text{(deterministic history)}.
+\end{equation}
+
+\section{Implementation in Julia}
+We integrate the moment DDEs using \texttt{DifferentialEquations.jl}. The state is
+\begin{equation*}
+  y(t) = \big[\ \mu(t);\ \mathrm{vec}(M(t));\ \mathrm{vec}(S_1(t));\ \dots;\ \mathrm{vec}(S_K(t))\ \big].
+\end{equation*}
+We define a layout to pack/unpack $\mu$, $M$, and $\{S_k\}$. The RHS evaluates the coefficient matrices/vectors (possibly time-varying) at the current $t$, uses the solver-supplied \emph{absolute-time} history accessor $h(p,s)$ to fetch past states at $s=t-\tau$ and $s=t-k\tau$, and forms the derivatives from \eqref{eq:mean,eq:Mdot,eq:Sk}.
+
+\paragraph{Absolute-time history.}
+In the \texttt{DDEProblem} API, the history accessor is \emph{absolute time}: calling \texttt{h(p, s)} returns the state at time $s$ (for $s\le0$ the user-provided history; for $s>0$ the previously integrated/interpolated solution). This is why we use \texttt{h(p, t - \textit{lag})} rather than offsets.
+
+\subsection*{Core code (excerpt)}
+\begin{lstlisting}
+# coefficients can be constants or functions of time
+mat_at(M, t) = M isa Function ? M(t) : M
+vec_at(v, t) = v isa Function ? v(t) : v
+
+function E_LLᵀ(αt, βt, γt, μ, μτ, M, C, N)
+    αt*M*αt' + βt*N*βt' + αt*C*βt' + βt*C'*αt' +
+    αt*μ*γt' + γt*μ'*αt' + βt*μτ*γt' + γt*μτ'*βt' + γt*γt'
+end
+
+function mom_rhs!(dy, y, h, p, t)
+    A = mat_at(p.A,t); B = mat_at(p.B,t)
+    α = mat_at(p.α,t); β = mat_at(p.β,t)
+    c = vec_at(p.c,t); γ = vec_at(p.γ,t)
+    μ, M, S = unpack_state(y, p.layout)
+
+    # past states at absolute times
+    μτ, Mτ, Sτ = unpack_state(h(p, t - p.τ), p.layout)
+    μedge, _, _ = unpack_state(h(p, t - (p.K+1)*p.τ), p.layout)
+    S_Kp1 = μ * μedge'
+
+    C = (p.K>=1) ? S[1] : zeros(p.layout.n, p.layout.n)
+
+    dμ = A*μ + B*μτ + c
+    dM = A*M + M*A' + B*Mτ + C*B' + c*μ' + μ*c' +
+         E_LLᵀ(α, β, γ, μ, μτ, M, C, Mτ)
+
+    for k in 1:p.K
+        Sk = S[k]
+        Skm1_delay = (k==1) ? Mτ : Sτ[k-1]
+        Skp1 = (k<p.K) ? S[k+1] : S_Kp1
+        μkm, _, _ = unpack_state(h(p, t - k*p.τ), p.layout)
+        dSk = A*Sk + Sk*A' + B*Skm1_delay + Skp1*B' + c*μkm' + μ*c'
+        dy[p.layout.idx_S[k]] .= vec(dSk)
+    end
+
+    dy[p.layout.idx_μ] .= dμ
+    dy[p.layout.idx_M] .= vec(dM)
+end
+\end{lstlisting}
+
+The full implementation (packing, history builder, driver, etc.) matches the code you now use. Coefficients may be either constants or functions $t\mapsto$ matrix/vector, and the history is supplied by a user function $\phi(t)$ returning the deterministic initial state when $t\le0$.
+
+\section{Validation on a scalar test}
+Take $n=1$ with
+$A=-6$, $B=0$, $\alpha=0$, $\beta=2$, $\gamma=1$, $\tau=1$, and deterministic history $\phi\equiv 3$.
+On $[0,1]$,
+\begin{align*}
+  \dot M &= -12 M + \underbrace{\big(4M(t-\tau)+4\mu(t-\tau)+1\big)}_{\mathbb{E}[(\beta x_{-\tau}+\gamma)^2]}
+          = -12M + 49,\\
+  \mu(t) &= 3 e^{-6t}, \qquad M(0)=9.
+\end{align*}
+Therefore the variance on the first step is
+\begin{equation*}
+  \operatorname{Var}(t)=M(t)-\mu(t)^2=\frac{49}{12}\big(1-e^{-12t}\big),\qquad 0\le t\le 1,
+\end{equation*}
+which rises from $0$ to $\approx 4.083$ by $t=1$, and then begins to bend as the delayed inputs $M(t-1)$ and $\mu(t-1)$ decay. The numerical integration matches this shape when the absolute-time history access is used consistently in the RHS.
+
+\section{Extensions}
+\paragraph{Multi-dimensional noise.}
+If $W$ is $m$-dimensional with covariance $Q$ (possibly time-varying), the only change is
+\begin{equation*}
+  \mathbb{E}[L L^\top]\ \longrightarrow\ \mathbb{E}[L Q L^\top]
+\end{equation*}
+in \eqref{eq:Mdot}, i.e.\ insert $Q$ between the left/right factors in each bilinear term.
+
+\paragraph{Random history.}
+If the history is random with known first/second moments and independent of future noise, build the history state $y(t)$ for $t\le0$ from those moments instead of $\phi\phi^\top$. In that case $S_{K+1}(t)$ should be computed via the history accessor to use the correct cross-moment with the random history.
+
+\paragraph{Covariances directly.}
+One can evolve $P$ and $R_k$ directly; evolving raw moments tends to be simpler and numerically robust, with covariances formed as $P=M-\mu\mu^\top$ and $R_k=S_k-\mu\,\mu(\cdot)^\top$ for diagnostics.
+
+% \section{Common pitfalls}
+% \begin{itemize}
+%   \item \textbf{Absolute vs.\ offset time in history access.} In \texttt{DifferentialEquations.jl}, call \texttt{h(p, t-\tau)} to fetch $t-\tau$, not \texttt{h(p, -\tau)}.
+%   \item \textbf{Forgetting constant--mean cross terms.} The $c\,\mu(\cdot)^\top$ and $\mu\,c^\top$ pieces appear in all cross-moment equations.
+%   \item \textbf{Using deterministic history assumptions inadvertently.} If you later switch to random history, make sure to adapt $y(t)$ for $t\le0$ and compute $S_{K+1}(t)$ via \texttt{h}.
+% \end{itemize}
+
+\section{Usage outline}
+\begin{lstlisting}
+# Define A,B,α,β as constants or functions t->Matrix; c,γ as vectors or t->Vector
+n = 2; A(t) = -0.8I(n); B(t) = 0.1I(n); α(t) = 0.3I(n); β(t) = 0.1I(n)
+c(t) = zeros(n); γ(t) = [0.2, 0.0]
+τ = 0.7; T = 5.0
+φ(t) = [1.0, 0.0]             # deterministic history for t ≤ 0
+
+sol, L = solve_moments(A,B,c,α,β,γ; τ=τ, T=T, φ=φ, saveat=0:0.05:T)
+μt, Mt, St = get_moments_at(sol, L, 3.0)   # read moments at t=3.0
+\end{lstlisting}
+
+\section{Conclusion}
+The linear--affine SDDE \eqref{eq:sdde} admits a closed deterministic DDE system for the mean, second moment, and a finite ladder of cross-moments on any finite horizon. Implemented with the method of steps and absolute-time history access, the approach is efficient and stable in practice, and readily accommodates time-varying coefficients and multi-dimensional noise.
+\end{document}
