@@ -87,6 +87,9 @@ For $D(t)=S_2(t)$ (and similarly onward),
 \begin{equation}\label{eq:Dd}
   \dot S_2(t) = A S_2(t) + S_2(t)A^\top + B C(t-\tau) + S_3(t) B^\top + c\,\mu(t-2\tau)^\top + \mu(t)\,c^\top.
 \end{equation}
+\color{red}
+Azért itt lehetnek buktatók, ha időfüggőek az együtthatók, mert lehet, hogy pl $c(t-\tau)$ meg ilyenek jelennek meg, meg kell nézni.
+\color{black}
 In general, for $k\ge1$,
 \begin{equation}\label{eq:Sk}
   \boxed{\;\dot S_k(t) = A S_k + S_k A^\top + B\,S_{k-1}(t-\tau) + S_{k+1} B^\top + c\,\mu(t-k\tau)^\top + \mu(t)\,c^\top,\;}
@@ -213,3 +216,4 @@ sol, L = solve_moments(A,B,c,α,β,γ; τ=τ, T=T, φ=φ, saveat=0:0.05:T)
 \section{Conclusion}
 The linear--affine SDDE \eqref{eq:sdde} admits a closed deterministic DDE system for the mean, second moment, and a finite ladder of cross-moments on any finite horizon. Implemented with the method of steps and absolute-time history access, the approach is efficient and stable in practice, and readily accommodates time-varying coefficients and multi-dimensional noise.
 \end{document}
+

@@ -11,6 +11,7 @@ struct Layout
 end
 
 function make_layout(n, K)
+    println("K: ", K)
     i = 1
     idx_μ = i:(i+n-1)
     i += n
@@ -100,7 +101,7 @@ function mom_rhs!(dy, y, h, p::MomentParams, t)
     for k in 1:K
         Sk = S[k]
         Skm1_delay = (k == 1) ? Mτ : Sτ[k-1]         # S_{k-1}(t-τ)
-        Skp1 = (k < K) ? S[k+1] : S_Kp1              # S_{k+1}(t)
+        Skp1 = (k < K) ? S[k+1] : S_Kp1   
 
         # mean at t - kτ (absolute time)
         ykm = h(p, t - k * p.τ)
@@ -134,13 +135,14 @@ end
 Driver.
 A,B,α,β may be Matrix or t->Matrix; c,γ may be Vector or t->Vector.
 """
-function solve_moments(A, B, c, α, β, γ; τ, T, φ, tspan=(0.0, T), saveat=nothing)
+function solve_moments(A, B, c, α, β, γ; τ, T, φ, tspan=(0.0, T), saveat=nothing, depth=1)
     # infer n from A at t=0
     A0 = mat_at(A, 0.0)
     n = size(A0, 1)
     @assert size(A0) == (n, n)
 
-    K = Int(floor(T / τ))
+    # K = Int(floor(T / τ))
+    K = depth;
     L = make_layout(n, K)
 
     p = MomentParams(A=A, B=B, c=c, α=α, β=β, γ=γ, τ=τ, K=K, φ=φ, layout=L)
