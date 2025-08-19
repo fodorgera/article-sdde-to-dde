@@ -28,7 +28,7 @@ end
 
 # deterministic history φ(t) for t≤0
 φ(t) = [0.0, 0.0];
-T = 2*τ;
+T = 10*τ;
 sol1, L1 = solve_moments(A, B, c, α, β, γ; τ=τ, T=T, φ=φ, depth=1, saveat=0:0.05:T);
 sol2, L2 = solve_moments(A, B, c, α, β, γ; τ=τ, T=T, φ=φ, depth=2, saveat=0:0.05:T);
 sol10, L10 = solve_moments(A, B, c, α, β, γ; τ=τ, T=T, φ=φ, depth=10, saveat=0:0.05:T);

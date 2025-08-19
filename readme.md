@@ -3,6 +3,7 @@
 ### TODO
 
 - not sure if some $c(t-\tau)$ stuff is needed or not in the cross-moment differential equation
+- it would be interesting to try an adaptive depth (i am not even sure it is possible to change the state size mid simulation, but hell we could try)
 
 ### 2025-08-19
 
