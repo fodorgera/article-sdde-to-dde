@@ -24,7 +24,7 @@ begin
     γ(t) = [0.0, σ0]  # affine diffusion offset
 
     τ = 2 * π
-end
+end;
 
 # deterministic history φ(t) for t≤0
 φ(t) = [0.0, 0.0];

@@ -101,13 +101,17 @@ function mom_rhs!(dy, y, h, p::MomentParams, t)
     for k in 1:K
         Sk = S[k]
         Skm1_delay = (k == 1) ? Mτ : Sτ[k-1]         # S_{k-1}(t-τ)
-        Skp1 = (k < K) ? S[k+1] : S_Kp1   
+        Skp1 = (k < K) ? S[k+1] : S_Kp1
+
+        Atkτ = mat_at(p.A, t-k*τ)
+        Btkτ = mat_at(p.B, t-k*τ)
+        ctkτ = vec_at(p.c, t-k*τ)
 
         # mean at t - kτ (absolute time)
         ykm = h(p, t - k * p.τ)
         μkm, _, _ = unpack_state(ykm, L)
 
-        dSk = At * Sk + Sk * At' + Bt * Skm1_delay + Skp1 * Bt' + ct * μkm' + μ * ct'
+        dSk = At * Sk + Sk * Atkτ' + Bt * Skm1_delay + Skp1 * Btkτ' + ct * μkm' + μ * ctkτ'
         dy[L.idx_S[k]] .= vec(dSk)
     end
 

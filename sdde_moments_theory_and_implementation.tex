@@ -45,54 +45,66 @@ We derive and implement deterministic differential--delay equations (DDEs) for t
 \section{Model}
 Consider the $n$-dimensional SDDE
 \begin{equation}\label{eq:sdde}
-  \dd x(t) = \big(Ax(t) + B x(t-\tau) + c\big)\,\dd t
-   \;+\; \big(\alpha x(t) + \beta x(t-\tau) + \gamma\big)\,\dd W_t,
+  \dd x(t) = \big(A(t)x(t) + B(t) x(t-\tau) + c(t)\big)\,\dd t
+   \;+\; \big(\alpha(t) x(t) + \beta(t) x(t-\tau) + \gamma(t)\big)\,\dd W_t,
 \end{equation}
-where $A,B,\alpha,\beta\in\mathbb{R}^{n\times n}$, $c,\gamma\in\mathbb{R}^n$, $\tau>0$, and $W_t$ is a scalar Wiener process.\footnote{For $m$-dimensional $W_t$ with covariance $Q$, replace $LL^\top$ by $LQL^\top$ throughout.} We assume an initial segment (history) $x(s)=\phi(s)$ for $s\in[-\tau,0]$ (deterministic unless stated otherwise).
+where $A(t),B(t),\alpha(t),\beta(t)\in\mathbb{R}^{n\times n}$, $c(t),\gamma(t)\in\mathbb{R}^n$, $\tau>0$, and $W_t$ is a scalar Wiener process.\footnote{For $m$-dimensional $W_t$ with covariance $Q$, replace $LL^\top$ by $LQL^\top$ throughout.} We assume an initial segment (history) $x(s)=\phi(s)$ for $s\in[-\tau,0]$ (deterministic unless stated otherwise).
 
 Define the mean $\mu(t)=\mathbb{E}[x(t)]$, the raw second moment $M(t)=\mathbb{E}[x(t)x(t)^\top]$, and for $k\ge1$ the cross-moments
 \begin{equation}
   S_k(t) \;=\; \mathbb{E}\!\left[x(t)\,x\big(t-k\tau\big)^\top\right].
 \end{equation}
-Denote $N(t)=M(t-\tau)$ and $C(t)=S_1(t)$.
 
 \section{Moment equations}
 Taking expectations of \eqref{eq:sdde} gives the closed mean DDE
 \begin{equation}\label{eq:mean}
-  \dot\mu(t) = A\,\mu(t) + B\,\mu(t-\tau) + c.
+  \dot\mu(t) = A(t)\,\mu(t) + B(t)\,\mu(t-\tau) + c(t).
 \end{equation}
+The Ito\^'s product rule simply stats that taking derivatives has to include the quadratic variation term.
+\begin{equation}
+  \dd x(t)x(t)^\top = \dd x(t)x(t)^\top + x(t)\dd x(t)^\top + \dd x(t) \dd x(t)^\top\,.
+\end{equation}
+So, for example if you have a system like this: $\dd x(t) = f x(t) \dd t + g x(t) \dd W_t$, then the quadratic variation term is $g x(t) g x(t)^\top \dd t$.
+
+\begin{equation}
+  \dd x(t)x(t)^\top = f(t)x(t)^\top \dd t + x(t)^\top f(t) \dd t +g(t)g(t)^\top \dd W_t^2.
+\end{equation}
+
+And we take the expectation of both sides and devide formally by $\dd t$ to get the moment equation for the second moment.
+
 For the second moment, apply It\^o's product rule to $x(t)x(t)^\top$ and note that the quadratic variation contributes $L(t)L(t)^\top$ with
-$L(t)=\alpha x(t)+\beta x(t-\tau)+\gamma$:
+$L(t)=\alpha(t) x(t)+\beta(t) x(t-\tau)+\gamma(t)$:
 \begin{align}\label{eq:Mdot}
-  \dot M(t) &= A M(t) + M(t)A^\top + B M(t-\tau) + C(t) B^\top + c\,\mu(t)^\top + \mu(t)\,c^\top
+  \dot M(t) &= A(t) M(t) + M(t)A(t)^\top + B(t) M(t-\tau) + S_1(t) B(t)^\top + c(t)\,\mu(t)^\top + \mu(t)\,c(t)^\top
   \nonumber\\
   &\quad + \mathbb{E}\!\left[L(t)L(t)^\top\right],
 \end{align}
 and a standard expansion yields
 \begin{align}\label{eq:ELLT}
 \mathbb{E}\!\left[L L^\top\right] &=
-  \alpha M\alpha^\top + \beta N\beta^\top + \alpha C\beta^\top + \beta C^\top\alpha^\top
+  \alpha(t) M(t)\alpha(t)^\top + \beta(t) M(t-\tau)\beta(t)^\top + \alpha(t) S_1(t)\beta(t)^\top + \beta(t) S_1(t)^\top\alpha(t)^\top
   \nonumber\\
-&\quad + \alpha\mu\,\gamma^\top + \gamma\mu^\top\alpha^\top
-      + \beta\mu_\tau\,\gamma^\top + \gamma\mu_\tau^\top\beta^\top + \gamma\gamma^\top,
+&\quad + \alpha(t)\mu(t)\,\gamma(t)^\top + \gamma(t)\mu(t)^\top\alpha(t)^\top
+      + \beta(t)\mu(t-\tau)\,\gamma(t)^\top + \gamma(t)\mu(t-\tau)^\top\beta(t)^\top + \gamma(t)\gamma(t)^\top,
 \end{align}
-where $\mu_\tau=\mu(t-\tau)$ and $N=M(t-\tau)$.
 
 For cross-moments there is no It\^o correction because $x(t-k\tau)$ has no differential at time $t$.
-For $C(t)=S_1(t)$ one gets
+This essentially means that when we apply the Ito\^'s product rule to $x(t)x(t-\tau)^\top$, we get the following:
+\begin{equation}
+  \dd x(t)x(t-\tau)^\top= f(t) x(t-\tau)^\top \dd t + x(t)^\top f(t-\tau) \dd t +g(t)g(t-\tau)^\top \dd W_t \dd W_{t-\tau}.
+\end{equation}
+The expectation of the product of the two non-overlapping Wiener increments is zero, i.e. $\mathbb{E}[\dd W_t \dd W_{t-k\tau}]=0$ because they are independent.
+
+For $S_1(t)$ one gets
 \begin{equation}\label{eq:Cd}
-  \dot C(t) = A C(t) + C(t)A^\top + B M(t-\tau) + S_2(t) B^\top + c\,\mu(t-\tau)^\top + \mu(t)\,c^\top.
+  \dot S_1(t) = A(t) S_1(t) + S_1(t)A(t-\tau)^\top + B(t) M(t-\tau) + S_2(t) B(t-\tau)^\top + c(t)\,\mu(t-\tau)^\top + \mu(t)\,c(t-\tau)^\top.
 \end{equation}
-For $D(t)=S_2(t)$ (and similarly onward),
 \begin{equation}\label{eq:Dd}
-  \dot S_2(t) = A S_2(t) + S_2(t)A^\top + B C(t-\tau) + S_3(t) B^\top + c\,\mu(t-2\tau)^\top + \mu(t)\,c^\top.
+  \dot S_2(t) = A(t) S_2(t) + S_2(t)A(t-2\tau)^\top + B(t) S_1(t-\tau) + S_3(t) B(t-2\tau)^\top + c(t)\,\mu(t-2\tau)^\top + \mu(t)\,c(t-2\tau)^\top.
 \end{equation}
-\color{red}
-Azért itt lehetnek buktatók, ha időfüggőek az együtthatók, mert lehet, hogy pl $c(t-\tau)$ meg ilyenek jelennek meg, meg kell nézni.
-\color{black}
 In general, for $k\ge1$,
 \begin{equation}\label{eq:Sk}
-  \boxed{\;\dot S_k(t) = A S_k + S_k A^\top + B\,S_{k-1}(t-\tau) + S_{k+1} B^\top + c\,\mu(t-k\tau)^\top + \mu(t)\,c^\top,\;}
+  \boxed{\;\dot S_k(t) = A(t) S_k(t) + S_k(t) A(t-k\tau)^\top + B(t)\,S_{k-1}(t-\tau) + S_{k+1}(t) B(t-k\tau)^\top + c(t)\,\mu(t-k\tau)^\top + \mu(t)\,c(t-k\tau)^\top,\;}
 \end{equation}
 with the convention $S_0(t)=M(t)$ and $S_{-1}(t)\equiv M(t-\tau)$ when $k=1$.
 
