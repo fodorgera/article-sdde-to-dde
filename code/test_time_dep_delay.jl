@@ -14,9 +14,11 @@ begin
     Ω(t) = Ω0 * (1 + RVA * sin(RVF * t))
     # Ω(t) = Ω0
     ωm = π / 10
-    τ(t) = 2 * π / Ω(t)
-    τmax = 2 * π / (Ω0 * (1 - RVA))
+    # τ(t) = 2 * π / Ω(t)
+    τ(t) = 2 * π / Ω0
+    # τmax = 2 * π / (Ω0 * (1 - RVA))
     # τmax = τ(0.0);
+    τmax = 2 * π / Ω0
 end;
 
 begin
@@ -32,8 +34,8 @@ end;
 
 φ(t) = [0.01, 0.0];
 T = 10*τmax;
-sol1, L1 = solve_moments(A, B, c, α, β, γ; τ=τ, T=T, φ=φ, depth=1, saveat=0:0.05:T);
-sol10, L10 = solve_moments(A, B, c, α, β, γ; τ=τ, T=T, φ=φ, depth=10, saveat=0:0.05:T);
+sol1, L1 = solve_moments(A, B, c, α, β, γ;τmax=τmax, τ=τ, T=T, φ=φ, depth=1, saveat=0:0.05:T);
+sol10, L10 = solve_moments(A, B, c, α, β, γ;τmax=τmax, τ=τ, T=T, φ=φ, depth=10, saveat=0:0.05:T);
 
 using Plots
 

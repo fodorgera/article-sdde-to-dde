@@ -31,3 +31,17 @@ avgs = [s[1] for s in sol.u];
 ts = sol.t;
 
 plot(ts, [avgs, avgs .+ vars])
+
+# validate with msdi
+using MSDI
+msdi_prob = MSDIProblem(t->A, t->B, t->c, t->α, t->β, t->γ, τ,t->τ);
+
+u01 = [3.0];
+u02 = u01*u01';
+msdi_sol = msdi_solve_opt(msdi_prob, undef; u01 = u01, u02 = u02, isTimeDependent = true, isTimeDependentDelay = true,method=:ssm, tmax=T, k=1000);
+
+msdi_vars = MSDI.getVar(msdi_sol[3]);
+msdi_avgs = MSDI.getMean(msdi_sol[3]);
+msdi_stds = sqrt.(msdi_vars.values[1]);
+
+plot!(msdi_avgs.ts, [msdi_avgs.values[1], msdi_avgs.values[1] .+ msdi_stds], label=["avg" "avg + std"])

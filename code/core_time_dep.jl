@@ -11,7 +11,6 @@ struct Layout
 end
 
 function make_layout(n, K)
-    println("K: ", K)
     i = 1
     idx_μ = i:(i+n-1)
     i += n
@@ -39,6 +38,7 @@ end
 # --- NEW: helpers to allow constants or functions of time ---
 mat_at(M, t) = M isa Function ? M(t) : M
 vec_at(v, t) = v isa Function ? v(t) : v
+val_at(v, t) = v isa Function ? v(t) : v
 
 # ---- Parameters ----
 Base.@kwdef mutable struct MomentParams
@@ -48,7 +48,7 @@ Base.@kwdef mutable struct MomentParams
     α::Any            # Matrix OR (t->Matrix)
     β::Any            # "
     γ::Any            # Vector OR (t->Vector)
-    τ::Float64
+    τ::Any # float or function of time
     K::Int
     φ::Function       # history x(t) for t≤0 → Vector
     layout::Layout
@@ -75,26 +75,30 @@ function mom_rhs!(dy, y, h, p::MomentParams, t)
     βt = mat_at(p.β, t)
     ct = vec_at(p.c, t)
     γt = vec_at(p.γ, t)
+    τt = val_at(p.τ, t)
 
     μ, M, S = unpack_state(y, L)
 
-    # delayed state at t-τ (absolute time API)
-    yτ = h(p, t - p.τ)
+    # delayed state at t-τ (absolute time API). Copy so we own the buffer:
+    # the solver may reuse the same buffer for subsequent h() calls, which would
+    # overwrite μτ, Mτ, Sτ when we call h() again (edge and loop below).
+    yτ = copy(h(p, t - τt))
     μτ, Mτ, Sτ = unpack_state(yτ, L)
 
     # edge term S_{K+1}(t): relies on history since t-(K+1)τ < 0
-    y_edge = h(p, t - (K + 1) * p.τ)
+    y_edge = h(p, t - (K + 1) * τt)
     μ_edge, _, _ = unpack_state(y_edge, L)           # equals φ(...) for deterministic history
     S_Kp1 = μ * μ_edge'
 
-    # S₁ alias
+    # S₁ alias (S₁(t) = E[x(t) x(t-τ)'])
     C = (K >= 1) ? S[1] : zeros(n, n)
 
     # mean
     dμ = At * μ + Bt * μτ + ct
 
-    # second moment
-    dM = At * M + M * At' + Bt * Mτ + C * Bt' + ct * μ' + μ * ct' +
+    # second moment: d/dt E[x x'] = E[(dx)x'] + E[x(dx)'] + (qv).
+    # From (dx)x': B E[x(t-τ) x(t)'] = B S₁'; from x(dx)': S₁ B'. So drift B-terms are B S₁' + S₁ B', not B M(t-τ) + S₁ B'.
+    dM = At * M + M * At' + Bt * C' + C * Bt' + ct * μ' + μ * ct' +
          E_LLᵀ(αt, βt, γt, μ, μτ, M, C, Mτ)
 
     # cross-moments S_k
@@ -103,12 +107,12 @@ function mom_rhs!(dy, y, h, p::MomentParams, t)
         Skm1_delay = (k == 1) ? Mτ : Sτ[k-1]         # S_{k-1}(t-τ)
         Skp1 = (k < K) ? S[k+1] : S_Kp1
 
-        Atkτ = mat_at(p.A, t-k*τ)
-        Btkτ = mat_at(p.B, t-k*τ)
-        ctkτ = vec_at(p.c, t-k*τ)
+        Atkτ = mat_at(p.A, t-k*τt)
+        Btkτ = mat_at(p.B, t-k*τt)
+        ctkτ = vec_at(p.c, t-k*τt)
 
         # mean at t - kτ (absolute time)
-        ykm = h(p, t - k * p.τ)
+        ykm = h(p, t - k * τt)
         μkm, _, _ = unpack_state(ykm, L)
 
         dSk = At * Sk + Sk * Atkτ' + Bt * Skm1_delay + Skp1 * Btkτ' + ct * μkm' + μ * ctkτ'
@@ -122,10 +126,11 @@ end
 
 "History → build y(t) for t≤0 from φ(t) (deterministic history)."
 function history_state(p::MomentParams, t)
-    n, K, τ, L = size(mat_at(p.A, 0.0), 1), p.K, p.τ, p.layout
+    τt = val_at(p.τ, t)
+    n, K, τt, L = size(mat_at(p.A, 0.0), 1), p.K, τt, p.layout
     μ = p.φ(t)
     M = μ * μ'
-    S = [μ * (p.φ(t - k * τ))' for k in 1:K]
+    S = [μ * (p.φ(t - k * τt))' for k in 1:K]
     y = zeros(length(L.idx_μ) + length(L.idx_M) + K * n * n)
     y[L.idx_μ] .= μ
     y[L.idx_M] .= vec(M)
@@ -138,15 +143,20 @@ end
 """
 Driver.
 A,B,α,β may be Matrix or t->Matrix; c,γ may be Vector or t->Vector.
+Optional solver kwargs (e.g. reltol=1e-8, abstol=1e-10, alg=MethodOfSteps(Tsit5()))
+can be passed to improve accuracy if avg+std still lags the reference.
 """
-function solve_moments(A, B, c, α, β, γ; τ, T, φ, tspan=(0.0, T), saveat=nothing, depth=1)
+function solve_moments(A, B, c, α, β, γ; τmax=undef, τ, T, φ, tspan=(0.0, T), saveat=nothing, depth=1, kwargs...)
     # infer n from A at t=0
     A0 = mat_at(A, 0.0)
     n = size(A0, 1)
     @assert size(A0) == (n, n)
 
-    # K = Int(floor(T / τ))
-    K = depth;
+    τ0 = τmax !== undef ? τmax : val_at(τ, 0.0)
+    # Closure S_{K+1}(t) = μ(t) φ(t-(K+1)τ)' is only valid when t-(K+1)τ ≤ 0.
+    # So we need (K+1)τ > T, i.e. K ≥ floor(T/τ), for the moment DDE to be valid on [0,T].
+    K_min = Int(floor(T / τ0))
+    K = max(depth, K_min)
     L = make_layout(n, K)
 
     p = MomentParams(A=A, B=B, c=c, α=α, β=β, γ=γ, τ=τ, K=K, φ=φ, layout=L)
@@ -154,10 +164,12 @@ function solve_moments(A, B, c, α, β, γ; τ, T, φ, tspan=(0.0, T), saveat=no
     y0 = history_state(p, 0.0)
 
     h_history(p_, s) = history_state(p_, s)  # used only for s ≤ 0
-    dde = DDEProblem(mom_rhs!, h_history, tspan, p; constant_lags=[τ])
-    sol = solve(dde; saveat=saveat)
+    # Declare all lags τ, 2τ, …, (K+1)τ so the solver steps and interpolates correctly.
+    lags = [k * τ0 for k in 1:(K + 1)]
+    dde = DDEProblem(mom_rhs!, h_history, tspan, p; constant_lags=lags)
+    sol = solve(dde; dt=τ0/1000, saveat=saveat, kwargs...)
     return sol, L
 end
 
-"Helper to extract at time t"
+    "Helper to extract at time t"
 get_moments_at(sol, L::Layout, t) = unpack_state(sol(t), L)

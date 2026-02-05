@@ -92,8 +92,8 @@ function mom_rhs!(dy, y, h, p::MomentParams, t)
     # Mean
     dμ = A * μ + B * μτ + c
 
-    # Second moment
-    dM = A * M + M * A' + B * Mτ + C * B' + c * μ' + μ * c' +
+    # Second moment: drift B-terms are B S₁' + S₁ B', not B M(t-τ) + S₁ B'
+    dM = A * M + M * A' + B * C' + C * B' + c * μ' + μ * c' +
          E_LLᵀ(α, β, γ, μ, μτ, M, C, Mτ)
 
     # Cross-moments
