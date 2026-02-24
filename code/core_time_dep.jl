@@ -1,7 +1,10 @@
 using DifferentialEquations
 using LinearAlgebra
 
-"State layout (unchanged)"
+"""
+State layout: y = [μ; vec(M); vec(S₁); …; vec(S_K)].
+Matrices are stored in column-major order (Julia default): vec(M)[(j-1)*n+i] == M[i,j].
+"""
 struct Layout
     n::Int
     K::Int
@@ -116,6 +119,7 @@ function mom_rhs!(dy, y, h, p::MomentParams, t)
         μkm, _, _ = unpack_state(ykm, L)
 
         dSk = At * Sk + Sk * Atkτ' + Bt * Skm1_delay + Skp1 * Btkτ' + ct * μkm' + μ * ctkτ'
+        # Store in same column-major order as unpack_state expects
         dy[L.idx_S[k]] .= vec(dSk)
     end
 

@@ -8,20 +8,20 @@ begin
     b0 = -0.2
     ε = 1.0
     c0 = 0.15
-    σ0 = 0.3
+    σ0 = 0.0
     ω = 1.0
 end
 # Problem size
 begin
     n = 2
-    A(t) = [0 1.0; -(δ + ε * cos(ω * t)) -a1]
-    B(t) = [0 0; b0 0]
-    c(t) = [0.0, c0]
+    AM(t) = [0 1.0; -(δ + ε * cos(ω * t)) -a1]
+    BM(t) = [0 0; b0 0]
+    cM(t) = [0.0, c0]
 
     # multiplicative noise (scalar Wiener)
-    α(t) = [0 0.0; -σ0*(δ+ε*cos(ω * t)) -σ0*a1]
-    β(t) = σ0 * B(t)
-    γ(t) = [0.0, σ0]  # affine diffusion offset
+    αM(t) = [0 0.0; -σ0*(δ+ε*cos(ω * t)) -σ0*a1]
+    βM(t) = σ0 * BM(t)
+    γM(t) = [0.0, σ0]  # affine diffusion offset
 
     τ = 2 * π
     # τt(t) = 1.5*π+(0.5*sin(t))
@@ -31,11 +31,11 @@ end;
 # deterministic history φ(t) for t≤0
 φ(t) = [0.0, 0.0];
 T = 30;
-sol1, L1 = solve_moments(A, B, c, α, β, γ; τ=τt, τmax=τ, T=T, φ=φ, depth=1, saveat=0:0.05:T);
-sol2, L2 = solve_moments(A, B, c, α, β, γ; τ=τt, τmax=τ, T=T, φ=φ, depth=2, saveat=0:0.05:T);
+sol1, L1 = solve_moments(AM, BM, cM, αM, βM, γM; τ=τt, τmax=τ, T=T, φ=φ, depth=1, saveat=0:0.05:T);
+sol2, L2 = solve_moments(AM, BM, cM, αM, βM, γM; τ=τt, τmax=τ, T=T, φ=φ, depth=2, saveat=0:0.05:T);
 # Use tighter tolerances and/or MethodOfSteps(Tsit5()) if avg+std still lags reference:
 # using DelayDiffEq
-sol10, L10 = solve_moments(A, B, c, α, β, γ; τ=τt, τmax=τ, T=T, φ=φ, depth=10, saveat=0:0.05:T,
+sol10, L10 = solve_moments(AM, BM, cM, αM, βM, γM; τ=τt, τmax=τ, T=T, φ=φ, depth=10, saveat=0:0.05:T,
     alg=MethodOfSteps(Tsit5()), reltol=1e-8, abstol=1e-10);
 # extract at a time
 # plot at tspan
@@ -54,7 +54,9 @@ x_sk = [[sk1i[1,1] for sk1i in [ski[i] for ski in sk]] for i in 1:NT];
 avgs = x_m1;
 stds = sqrt.(x_m2 - avgs.^2);
 
-plot(sol1.t, [avgs, avgs .+ stds], label=["avg" "avg + std"])
+test_avgs = sqrt.(x_m2);
+
+plot(sol1.t, [avgs, test_avgs], label=["avg" "avg + std"])
 
 moments2 = [get_moments_at(sol2,L2,ti) for ti in sol2.t];
 m12 = [m[1] for m in moments2];
@@ -87,16 +89,16 @@ plot!(sol10.t, [avgs3, avgs3 .+ stds3], label=["avg" "avg + std"])
 # verify with msdi
 using MSDI
 
-msdi_prob = MSDIProblem(A, B, c, α, β, γ, τ, τt);
+msdi_prob = MSDIProblem(AM, BM, cM, αM, βM, γM, τ, τt);
 
 u01 = [0.0, 0.0];
 u02 = u01*u01';
-msdi_sol = msdi_solve_opt(msdi_prob, undef; u01 = u01, u02 = u02, isTimeDependent = true, isTimeDependentDelay = true,method=:tr, tmax=T, k=2000);
+msdi_sol = msdi_solve_opt(msdi_prob, undef; u01 = u01, u02 = u02, isTimeDependent = true, isTimeDependentDelay = true,method=:tr, tmax=T, k=1000);
 
 msdi_vars = MSDI.getVar(msdi_sol[3]);
 msdi_avgs = MSDI.getMean(msdi_sol[3]);
 
-plot(msdi_avgs.ts, [msdi_avgs.values[1], msdi_avgs.values[1] .+ sqrt.(msdi_vars.values[1])], label=["avg" "avg + std"])
+plot!(msdi_avgs.ts, [msdi_avgs.values[1], msdi_avgs.values[1] .+ sqrt.(msdi_vars.values[1])], label=["avg" "avg + std"])
 
 # verify with ensemble simulations
 using DifferentialEquations
