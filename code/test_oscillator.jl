@@ -2,11 +2,12 @@
 include("core_manual.jl")
 
 using LinearAlgebra
+using Plots
 
 # problem size
 n = 2;
 p = 7; d = 3.5;
-σ0 = 0.0;
+σ0 = 0.1;
 A = [0.0 1.0; 5.0 0.0];
 # A = [0.0 1.0; -5.0 0.0];
 B = [0.0 0.0; -p -d];
@@ -20,11 +21,24 @@ c = [0.0, 0.0];
 T = 3.0;
 
 φ(t) = [0.1, 0.0];
-sol, L = solve_moments_manual(A, B, c, α, β, γ; τmax=τ, τ=τ, T=T, φ=φ, saveat=0:0.05:T);
+sol, L = solve_centered_moments(A, B, c, α, β, γ; τ=τ, T=T, φ=φ, saveat=0:0.05:T, depth=5);
 
-get_moments_at(sol, L, T)
-sol.u[1]
-using Plots
+sol, L = solve_extended_moments(A, B, c, α, β, γ; τ=τ, T=T, φ=φ, saveat=0:0.05:T, m=40);
+
+res = [get_x_moments(sol, L, t) for t in sol.t];
+
+avgs = [r[1][1] for r in res];
+vars = [r[2][1,1] for r in res];
+
+plot(sol.t, [avgs, avgs .+ sqrt.(vars)], label=["avg" "avg + std"])
+plot(sol.t, vars, label="moment dde")
+
+avgs = [s.x[1][1] for s in sol.u];
+vars = [s.x[2][1,1] for s in sol.u];
+stds = sqrt.(abs.(vars));
+plot(sol.t, [avgs, avgs .+ stds], label=["avg" "avg + std"])
+plot(vars)
+
 plot([s[1] for s in sol.u], xlabel="t", ylabel="μ(t)", title="Mean μ(t) over time")
 
 sol.u[61].x[2]
@@ -57,5 +71,5 @@ msdi_prob = MSDIProblem(t->A, t->B, t->c, t->α, t->β, t->γ, τ, t->τ);
 msdi_sol = msdi_solve_opt(msdi_prob, undef; u01 = u01, u02 = u02, isTimeDependent = false, isTimeDependentDelay = false, method=:ssm, tmax=T, k=1000);
 msdi_vars = MSDI.getVar(msdi_sol[3]);
 msdi_avgs = MSDI.getMean(msdi_sol[3]);
-plot!(msdi_vars.ts, msdi_vars.values[1], xlabel="t", ylabel="var(t)", title="Variance var(t) over time")
+plot(msdi_vars.ts, [msdi_avgs.values[1], msdi_avgs.values[1] .+ sqrt.(msdi_vars.values[1])], label=["avg" "avg + std"])
 plot!(msdi_avgs.ts, [msdi_avgs.values[1], msdi_avgs.values[1] .+ sqrt.(msdi_vars.values[1])], label=["avg" "avg + std"])

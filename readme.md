@@ -21,3 +21,8 @@ Nem tudtam rájönni, hogy mi a gond.
 Az van, hogy az Sk diffegyenletek nem adják vissza szépen a `μ(t)*μ(t-kτ)'` szorzatokat determinisztikus esetben és így nem is jön ki, hogy az M az igazából μ*μ'.
 Sokszor átnéztem a diffegyenletet, az jónak tűnik. Azt nem tudom, hogy esetleg a history-ban jól van-e figyelembe véve, pl. Sk1-et még τ-ig nem kellene integrálni, vagy bánat tudja.
 Tesztelgetek csak sima determinisztikus rendszereket és ha `Sk = μ(t)*μ(t-kτ)` akkor visszaadja a második momentum az első négyzetét, de az szerintem nem lesz jó a sztochasztikus esetekben. Vagy nem tudom, lehet, hogy érdemes lenne kipróbálni.
+
+### 2026-03-03
+
+Conclusion: shit's fucked.
+Probably need to discretize the state somehow for it to make sense and converge properly.
