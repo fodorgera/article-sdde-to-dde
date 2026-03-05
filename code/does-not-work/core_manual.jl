@@ -474,14 +474,14 @@ function build_extended_drift(A, B, c, τ; m::Int)
     I_n = Matrix{eltype(A)}(I, n, n)
     for j in 1:m
         rj = blockrange(n, j)
-        rjp1 = blockrange(n, j+1)
         rjm1 = blockrange(n, j-1)
-        if j == 1 || j == m
-            Ae[rj, rjm1] .+= (1/h) .* I_n
-            Ae[rj, rj]   .+= (-1/h) .* I_n
-        else
+        rjp1 = blockrange(n, j+1)
+        if j<m
             Ae[rj, rjm1] .+= (1/(2h)) .* I_n
-            Ae[rj, rjp1] .+= (1/(2h)) .* I_n
+            Ae[rj, rjp1]   .+= (-1/(2h)) .* I_n
+        else
+            Ae[rj, rj]   .+= (-1/h) .* I_n
+            Ae[rj, rjm1] .+= (1/h) .* I_n
         end
     end
 
@@ -521,7 +521,7 @@ Mean/variance of original x(t):
   Vx(t) = P00 block (j=0,j=0)
 """
 function solve_extended_moments(A, B, c, α, β, γ; τ, T, φ, m::Int=200,
-                                tspan=(0.0,T), saveat=nothing, kwargs...)
+                                tspan=(0.0,T), kwargs...)
     n = size(A,1)
     Ae, ce, h = build_extended_drift(A, B, c, τ; m=m)
     N = n*(m+1)
@@ -547,7 +547,8 @@ function solve_extended_moments(A, B, c, α, β, γ; τ, T, φ, m::Int=200,
     Q = similar(P0)
     zeroP = zero(eltype(P0))
 
-    function f!(dy, y, p, t)
+    function f!(dy, y, hfun, p, t)
+    # function f!(dy, y, p, t)
         @views μ = y[1:N]
         @views P = reshape(y[N+1:end], N, N)
 
@@ -582,8 +583,11 @@ function solve_extended_moments(A, B, c, α, β, γ; τ, T, φ, m::Int=200,
         return nothing
     end
 
-    prob = ODEProblem(f!, y0, tspan)
-    sol = solve(prob; saveat=saveat, kwargs...)
+    hist(p, s) = y0;
+
+    prob = DDEProblem(f!, y0, hist, tspan)
+    # prob = ODEProblem(f!, y0, tspan)
+    sol = solve(prob; adaptive=false, dt=τ/1000, kwargs...)
     return sol, (Ae=Ae, ce=ce, h=h, N=N, n=n, m=m)
 end
 

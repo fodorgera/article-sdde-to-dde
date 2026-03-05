@@ -23,7 +23,7 @@ T = 3.0;
 φ(t) = [0.1, 0.0];
 sol, L = solve_centered_moments(A, B, c, α, β, γ; τ=τ, T=T, φ=φ, saveat=0:0.05:T, depth=5);
 
-sol, L = solve_extended_moments(A, B, c, α, β, γ; τ=τ, T=T, φ=φ, saveat=0:0.05:T, m=40);
+@time sol, L = solve_extended_moments(A, B, c, α, β, γ; τ=τ, T=T, φ=φ, m=20);
 
 res = [get_x_moments(sol, L, t) for t in sol.t];
 
